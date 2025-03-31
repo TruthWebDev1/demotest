@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthWeb - The Ultimate Pi Network Hub | Insult Generator</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Custom Styles -->
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+        .container {
+            max-width: 800px;
+        }
+        h1 {
+            font-weight: 700;
+            color: #000;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+        #quote {
+            font-size: 1.5rem;
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        #quote:hover {
+            transform: scale(1.02);
+        }
+        #quotecite {
+            color: #666;
+        }
+        .btn-primary {
+            background: #FFD700;
+            border: none;
+            color: #000;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background: #FFA500;
+            transform: scale(1.05);
+        }
+        .btn-secondary {
+            background: #ccc;
+            border: none;
+            color: #000;
+        }
+        .modal-content {
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .hidden {
+            display: none;
+        }
+        .small {
+            font-size: 0.9rem;
+        }
+    </style>
+    <!-- jQuery -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- Pi Network SDK -->
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <script>
+        // Initialize Pi SDK
+        Pi.init({ 
+            version: "2.0", 
+            sandbox: true,
+            appId: "z2yj039g6mk8zkgjj3cyvmqvv8dkqxeqhxidlk0s0bqxcbcf6thcmqpid5ayju5k" // Replace with your actual appId in production
+        });
+
+        // Authentication and Payment Variables
+        const scopes = ['username', 'payments'];
+        let accessToken;
+        let username;
+
+        // Handle incomplete payments
+        function onIncompletePaymentFound(payment) {
+            const paymentId = payment.identifier;
+            const txid = payment.transaction?.txid;
+            return $.ajax({
+                url: '/payment/complete',
+                method: 'POST',
+                data: { paymentId, txid, debug: 'cancel' },
+                error: (xhr, status, error) => console.error('Incomplete payment error:', error)
+            });
+        }
+
+        // Authenticate User
+        $(document).ready(function() {
+            Pi.authenticate(scopes, onIncompletePaymentFound).then(function(auth) {
+                accessToken = auth.accessToken;
+                username = auth.user.username;
+                $('#username').text(username);
+                localStorage.setItem('piUser', JSON.stringify({
+                    username: username,
+                    accessToken: accessToken,
+                    walletAddress: auth.user.wallet_address
+                }));
+            }).catch(function(error) {
+                console.error('Authentication failed:', error);
+                $('#username').text('Guest');
+            });
+        });
+
+        // Payment Function
+        function createPayment() {
+            const paymentData = {
+                amount: 0.001, // Adjusted to match modal text
+                memo: "Unlock four more insults for only 0.001 Pi!",
+                metadata: { insultPack: 'basic' }
+            };
+
+            const paymentCallbacks = {
+                onReadyForServerApproval: (paymentId) => {
+                    $.post('/payment/approve', { paymentId, accessToken })
+                        .done(() => console.log('Payment approved'))
+                        .fail((err) => console.error('Approval error:', err));
+                },
+                onReadyForServerCompletion: (paymentId, txid) => {
+                    $.post('/payment/complete', { paymentId, txid, debug: 'complete' })
+                        .done(() => {
+                            count = 0;
+                            $('#newQuoteBtn').prop('disabled', false);
+                            $('#myModal').modal('hide');
+                            alert('Payment successful! Enjoy four more insults.');
+                        })
+                        .fail((err) => console.error('Completion error:', err));
+                },
+                onCancel: (paymentId) => {
+                    $.post('/payment/complete', { paymentId, debug: 'cancel' })
+                        .done(() => console.log('Payment cancelled'))
+                        .fail((err) => console.error('Cancel error:', err));
+                },
+                onError: (error, payment) => {
+                    console.error('Payment error:', error);
+                    alert('Payment failed. Please try again.');
+                }
+            };
+
+            Pi.createPayment(paymentData, paymentCallbacks);
+        }
+    </script>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="text-center">
+            <h1>The Insult Generator</h1>
+            <p><small>All in good fun. Use with care, <span id="username">Guest</span>.</small></p>
+            <button id="newQuoteBtn" class="btn btn-primary mt-3"><i class="fas fa-comment-dots"></i> Gimme An Insult</button>
+            <div id="instructions" class="small hidden">Here you go. For efficient trolling, this insult has been copied to your clipboard:</div>
+            <div id="quote"></div>
+            <div id="quotecite" class="small"></div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div class="modal fade" id="myModal" tabindex="-1" role="dialog" data-backdrop="static">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <p>For four more insults, please pay 0.001 Pi. What a deal!</p>
+                    <button id="payBtn" class="btn btn-primary mt-3" onclick="createPayment()"><i class="fas fa-coins"></i> Pay</button>
+                    <button class="btn btn-secondary mt-3" data-dismiss="modal" onclick="window.open('/back', '_self')"><i class="fas fa-times"></i> Never Mind</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let count = 0;
+
+        // Fetch and display a new insult
+        $('#newQuoteBtn').click(function() {
+            if (count < 4) {
+                $.get('/get_quote', function(data) {
+                    $('#instructions').removeClass('hidden');
+                    $('#quote').text(data);
+                    $('#quotecite').text('Insult courtesy of ' + (username || 'Guest') + '.');
+                    const insultText = data + ' Insult courtesy of ' + (username || 'Guest') + '.';
+                    navigator.clipboard.writeText(insultText).then(() => {
+                        console.log('Insult copied to clipboard');
+                    }).catch(err => {
+                        console.error('Clipboard error:', err);
+                    });
+                    count++;
+                    if (count === 4) {
+                        $('#newQuoteBtn').prop('disabled', true);
+                        $('#myModal').modal('show');
+                    }
+                }).fail(function(err) {
+                    console.error('Error fetching quote:', err);
+                    $('#quote').text('Oops! Couldn’t fetch an insult. Try again.');
+                });
+            }
+        });
+
+        // Reset functionality (optional, can be triggered after payment)
+        function resetInsultCount() {
+            count = 0;
+            $('#quote').text('');
+            $('#instructions').addClass('hidden');
+            $('#newQuoteBtn').prop('disabled', false);
+            $('#myModal').modal('hide');
+        }
+    </script>
+</body>
+</html>
